@@ -1,0 +1,1 @@
+{"name":"게임 뉴스 데스크","short_name":"게임 뉴스 데스크","description":"개인용 게임 뉴스 자동화 관리자 화면","start_url":"/game-news-pwa/","scope":"/game-news-pwa/","display":"standalone","background_color":"#f7f9fc","theme_color":"#f7f9fc","icons":[{"src":"/game-news-pwa/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
