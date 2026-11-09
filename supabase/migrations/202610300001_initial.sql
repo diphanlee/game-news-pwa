@@ -180,6 +180,12 @@ begin
   execute format('grant select on table public.%I to authenticated',t);
  end loop;
 end $$;
+-- Limit the server-only Edge Function role to the phase-1 workflow tables.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on table
+ public.collection_runs, public.news_sources, public.articles, public.topics,
+ public.topic_articles, public.topic_daily_stats, public.drafts, public.draft_citations
+to service_role;
 -- Restrict sensitive subscription data to its owning admin user.
 drop policy admin_read_push_subscriptions on public.push_subscriptions;
 create policy admin_read_push_subscriptions on public.push_subscriptions
