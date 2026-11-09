@@ -1,11 +1,11 @@
 # 게임 뉴스 데스크 — 1차 MVP
 
-관리자 로그인 후 네이버 뉴스 API와 RSS에서 게임 뉴스를 수집하고, 매일 최대 10개 토픽으로 묶어 선택한 토픽의 블로그 초안을 Gemini로 생성하는 개인용 PWA입니다. 생성된 글은 원문 출처와 함께 네이버 블로그 편집기로 복사할 수 있습니다.
+관리자 로그인 후 공개 RSS에서 게임 뉴스를 수집하고, 매일 최대 10개 토픽으로 묶어 선택한 토픽의 블로그 초안을 Gemini로 생성하는 개인용 PWA입니다. 생성된 글은 원문 출처와 함께 네이버 블로그 편집기로 복사할 수 있습니다.
 
 ## 구현 범위
 
 - Supabase 이메일/비밀번호 관리자 로그인 및 RLS 읽기 보호
-- 네이버 뉴스 검색 API + 관리자 등록 RSS/Atom 수집
+- 검증된 기본 게임 매체와 관리자 등록 RSS/Atom 수집
 - URL 정규화/중복 제거, 제목 키워드 유사도 기반 기사 그룹화
 - 날짜별 추천 토픽 최대 10개와 관련 기사 표시
 - 토픽 다중 선택 및 Gemini 초안 순차 생성(부분 실패 보고)
@@ -15,7 +15,7 @@
 
 ## 보안 구조
 
-GitHub Pages 브라우저에는 공개 가능한 Supabase URL과 publishable/anon 키만 포함됩니다. `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`는 브라우저 코드나 GitHub 저장소에 넣지 않습니다. 네이버 키는 NAVER Developers가 아닌 NAVER Cloud Platform의 NAVER API HUB에서 뉴스 API를 선택해 발급합니다. 수집·생성·DB 쓰기는 관리자 JWT를 확인하는 Supabase Edge Function에서만 수행합니다.
+GitHub Pages 브라우저에는 공개 가능한 Supabase URL과 publishable/anon 키만 포함됩니다. `GEMINI_API_KEY`와 `SUPABASE_SERVICE_ROLE_KEY`는 브라우저 코드나 GitHub 저장소에 넣지 않습니다. 수집·생성·DB 쓰기는 관리자 JWT를 확인하는 Supabase Edge Function에서만 수행합니다.
 
 RSS 등록은 HTTPS만 허용하며 localhost, 사설 IP 등 명백한 내부망 주소를 차단합니다. 모든 브라우저 DB 쓰기 권한은 회수되어 있습니다.
 
@@ -43,6 +43,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=PUBLIC_PUBLISHABLE_OR_ANON_KEY
 1. SQL Editor에서 아래 파일을 순서대로 한 번씩 실행합니다.
    - `supabase/migrations/202610300001_initial.sql`
    - `supabase/migrations/202611090001_mvp.sql`
+   - `supabase/migrations/202611090002_rss_defaults.sql`
 2. Authentication → Users에서 관리자 이메일/비밀번호 계정을 직접 만듭니다.
 3. 생성된 사용자의 UUID로 아래 SQL을 실행합니다.
 
@@ -57,7 +58,7 @@ values ('실제_AUTH_USER_UUID', 'admin');
 ```bash
 supabase login
 supabase link --project-ref PROJECT_REF
-supabase secrets set NAVER_CLIENT_ID NAVER_CLIENT_SECRET GEMINI_API_KEY
+supabase secrets set GEMINI_API_KEY
 supabase functions deploy news-desk
 ```
 
@@ -68,11 +69,10 @@ supabase functions deploy news-desk
 
 Supabase가 함수에 제공하는 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`는 별도 저장하지 않습니다. 함수 배포 후 로그인 → 수집 설정 → RSS 추가/뉴스 수집 → 추천 토픽 선택 → 초안 생성 순서로 실제 연동을 확인합니다.
 
-## 외부 API 준비
+## 외부 API 및 RSS 준비
 
-- 네이버 개발자 센터에서 검색 API 애플리케이션을 만들고 Web 서비스 URL에 실제 GitHub Pages 주소를 등록합니다.
 - Google AI Studio에서 Gemini API 키를 발급합니다. 무료 등급에는 요청량 제한이 있으므로 여러 토픽 생성은 순차 처리되며 실패 토픽 수를 별도로 표시합니다.
-- RSS가 없어도 네이버 API 키가 있으면 기본 검색어 4종으로 수집합니다. 네이버 키가 없으면 최소 1개의 공개 RSS를 등록해야 합니다.
+- 기본 수집원으로 인벤, 게임메카, 게임동아의 공개 RSS를 등록합니다. 관리자는 수집 설정에서 다른 HTTPS RSS/Atom 피드를 추가할 수 있습니다.
 
 ## GitHub Pages 배포
 

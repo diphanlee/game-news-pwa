@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.0';
-import { canonical, clean, groupArticles, parseFeedXml, publisher, validateFeedUrl, type RawArticle, type StoredArticle } from '../_shared/news.ts';
+import { groupArticles, parseFeedXml, validateFeedUrl, type RawArticle, type StoredArticle } from '../_shared/news.ts';
 
 type Db = SupabaseClient;
 type TopicRow = { id: string; title: string; summary: string | null; topic_articles: Array<{ articles: StoredArticle | null }> };
@@ -19,19 +19,6 @@ async function requireAdmin(req: Request, admin: Db) {
   return data.user;
 }
 
-async function fetchNaver(): Promise<RawArticle[]> {
-  const clientId = Deno.env.get('NAVER_CLIENT_ID'); const clientSecret = Deno.env.get('NAVER_CLIENT_SECRET');
-  if (!clientId || !clientSecret) return [];
-  const queries = ['게임 신작', '게임 업데이트', '게임 업계', '이스포츠']; const result: RawArticle[] = [];
-  for (const query of queries) {
-    const response = await fetch(`https://naverapihub.apigw.ntruss.com/search/v1/news?query=${encodeURIComponent(query)}&display=30&sort=date&format=json`, { headers: { 'X-NCP-APIGW-API-KEY-ID': clientId, 'X-NCP-APIGW-API-KEY': clientSecret } });
-    if (!response.ok) throw new Error(`NAVER_${response.status}`);
-    const data = await response.json();
-    for (const item of data.items ?? []) { const link = item.originallink || item.link; if (!link) continue; result.push({ title: clean(item.title), url: canonical(link), publisher: publisher(link), publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : null, excerpt: clean(item.description) }); }
-  }
-  return result;
-}
-
 async function fetchRss(source: { id: string; name: string; feed_url: string }): Promise<RawArticle[]> {
   const feedUrl = validateFeedUrl(source.feed_url); const response = await fetch(feedUrl, { headers: { 'User-Agent': 'GameNewsDesk/1.0 RSS Reader' }, signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error(`RSS_${response.status}`);
@@ -43,7 +30,7 @@ async function collectNews(admin: Db) {
   try {
     const sourceQuery = await admin.from('news_sources').select('id,name,feed_url').eq('source_type', 'rss').eq('enabled', true); if (sourceQuery.error) throw sourceQuery.error;
     const rssResults = await Promise.allSettled((sourceQuery.data ?? []).filter(x => x.feed_url).map(x => fetchRss(x as { id: string; name: string; feed_url: string })));
-    const raw = [...await fetchNaver(), ...rssResults.flatMap(item => item.status === 'fulfilled' ? item.value : [])]; const unique = [...new Map(raw.map(item => [item.url, item])).values()];
+    const raw = rssResults.flatMap(item => item.status === 'fulfilled' ? item.value : []); const unique = [...new Map(raw.map(item => [item.url, item])).values()];
     if (!unique.length) throw new Error('NO_SOURCES_OR_RESULTS');
     const upsert = await admin.from('articles').upsert(unique.map(item => ({ source_id: item.sourceId ?? null, title: item.title, canonical_url: item.url, publisher: item.publisher, published_at: item.publishedAt, excerpt: item.excerpt })), { onConflict: 'canonical_url' }).select('id,title,canonical_url,publisher,published_at,excerpt'); if (upsert.error) throw upsert.error;
     const stored: StoredArticle[] = upsert.data.map(item => ({ id: item.id, title: item.title, url: item.canonical_url, publisher: item.publisher || '출처 미상', publishedAt: item.published_at, excerpt: item.excerpt || '' })); const groups = groupArticles(stored); const date = kstDate(); let topicCount = 0;
