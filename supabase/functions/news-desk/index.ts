@@ -24,7 +24,7 @@ async function fetchNaver(): Promise<RawArticle[]> {
   if (!clientId || !clientSecret) return [];
   const queries = ['게임 신작', '게임 업데이트', '게임 업계', '이스포츠']; const result: RawArticle[] = [];
   for (const query of queries) {
-    const response = await fetch(`https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=30&sort=date`, { headers: { 'X-Naver-Client-Id': clientId, 'X-Naver-Client-Secret': clientSecret } });
+    const response = await fetch(`https://naverapihub.apigw.ntruss.com/search/v1/news?query=${encodeURIComponent(query)}&display=30&sort=date&format=json`, { headers: { 'X-NCP-APIGW-API-KEY-ID': clientId, 'X-NCP-APIGW-API-KEY': clientSecret } });
     if (!response.ok) throw new Error(`NAVER_${response.status}`);
     const data = await response.json();
     for (const item of data.items ?? []) { const link = item.originallink || item.link; if (!link) continue; result.push({ title: clean(item.title), url: canonical(link), publisher: publisher(link), publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : null, excerpt: clean(item.description) }); }

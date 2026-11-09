@@ -15,7 +15,7 @@
 
 ## 보안 구조
 
-GitHub Pages 브라우저에는 공개 가능한 Supabase URL과 publishable/anon 키만 포함됩니다. `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`는 브라우저 코드나 GitHub 저장소에 넣지 않습니다. 수집·생성·DB 쓰기는 관리자 JWT를 확인하는 Supabase Edge Function에서만 수행합니다.
+GitHub Pages 브라우저에는 공개 가능한 Supabase URL과 publishable/anon 키만 포함됩니다. `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`는 브라우저 코드나 GitHub 저장소에 넣지 않습니다. 네이버 키는 NAVER Developers가 아닌 NAVER Cloud Platform의 NAVER API HUB에서 뉴스 API를 선택해 발급합니다. 수집·생성·DB 쓰기는 관리자 JWT를 확인하는 Supabase Edge Function에서만 수행합니다.
 
 RSS 등록은 HTTPS만 허용하며 localhost, 사설 IP 등 명백한 내부망 주소를 차단합니다. 모든 브라우저 DB 쓰기 권한은 회수되어 있습니다.
 
