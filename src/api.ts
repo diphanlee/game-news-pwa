@@ -27,7 +27,11 @@ export async function runServerAction(action: string, payload: Record<string, un
     }
     throw new Error(message);
   }
-  if (!data?.ok) throw new Error(data?.message || '서버 작업이 실패했습니다.');
+  if (!data?.ok) {
+    const failureMessages = [...new Set((data?.failures ?? []).map(item => item.message).filter(Boolean))];
+    const detail = failureMessages.length ? ` 원인: ${failureMessages.join(', ')}` : '';
+    throw new Error(`${data?.message || '서버 작업이 실패했습니다.'}${detail}`);
+  }
   return data;
 }
 
