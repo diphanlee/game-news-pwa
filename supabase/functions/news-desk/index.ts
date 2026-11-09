@@ -1,5 +1,5 @@
 import { createSupabaseContext } from 'npm:@supabase/server@^1';
-import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.57.0';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.0';
 import { groupArticles, parseFeedXml, validateFeedUrl, type RawArticle, type StoredArticle } from './news.ts';
 
 type Db = SupabaseClient;
@@ -14,6 +14,14 @@ function errorMessage(error: unknown) {
   if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') return error.message;
   if (typeof error === 'string') return error;
   try { return JSON.stringify(error); } catch { return 'UNKNOWN'; }
+}
+function createAdminClient() {
+  const url = Deno.env.get('SUPABASE_URL');
+  let secret = '';
+  try { secret = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}').default || ''; } catch { /* handled below */ }
+  secret ||= Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  if (!url || !secret) throw new Error('SUPABASE_ADMIN_KEY_MISSING');
+  return createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
 async function requireAdmin(userDb: Db) {
@@ -79,7 +87,7 @@ export default { fetch: async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors(req) }); if (req.method !== 'POST') return json(req, { ok: false, message: 'POST 요청만 허용됩니다.' }, 405);
   const auth = await createSupabaseContext(req, { auth: 'user' });
   if (auth.error) return json(req, { ok: false, message: auth.error.message }, auth.error.status);
-  const userDb = auth.data.supabase as Db; const admin = auth.data.supabaseAdmin as Db;
+  const userDb = auth.data.supabase as Db; const admin = createAdminClient();
   try { await requireAdmin(userDb); const body = await req.json(); if (body.action === 'collect-news') { const result = await collectNews(admin); return json(req, { ok: true, ...result, message: `기사 ${result.collected}건을 수집하고 토픽 ${result.topics}개를 추천했습니다.${result.warnings ? ` RSS ${result.warnings}개는 실패했습니다.` : ''}` }); } if (body.action === 'generate-drafts') { const result = await generateDrafts(admin, body.topicIds); return json(req, { ok: result.drafts > 0, ...result, message: `초안 ${result.drafts}개를 생성했습니다.${result.failures.length ? ` ${result.failures.length}개는 실패했습니다.` : ''}` }, result.drafts ? 200 : 502); } if (body.action === 'save-rss-source') { const feedUrl = validateFeedUrl(String(body.feedUrl || '')); const name = String(body.name || '').trim().slice(0, 100); if (!name) throw new Error('RSS_NAME_REQUIRED'); const saved = await admin.from('news_sources').insert({ name, source_type: 'rss', feed_url: feedUrl, enabled: true }); if (saved.error) throw saved.error; return json(req, { ok: true, message: 'RSS 출처를 추가했습니다.' }); } return json(req, { ok: false, message: '지원하지 않는 작업입니다.' }, 400); }
   catch (error) { const message = errorMessage(error); console.error(message); const status = message === 'UNAUTHORIZED' ? 401 : message === 'FORBIDDEN' ? 403 : 400; return json(req, { ok: false, message }, status); }
 } };
