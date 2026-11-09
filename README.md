@@ -15,7 +15,7 @@
 
 ## 보안 구조
 
-GitHub Pages 브라우저에는 공개 가능한 Supabase URL과 publishable/anon 키만 포함됩니다. `GEMINI_API_KEY`와 `SUPABASE_SERVICE_ROLE_KEY`는 브라우저 코드나 GitHub 저장소에 넣지 않습니다. 수집·생성·DB 쓰기는 관리자 JWT를 확인하는 Supabase Edge Function에서만 수행합니다.
+GitHub Pages 브라우저에는 공개 가능한 Supabase URL과 publishable 키만 포함됩니다. `GEMINI_API_KEY`와 Supabase secret 키는 브라우저 코드나 GitHub 저장소에 넣지 않습니다. 수집·생성·DB 쓰기는 관리자 JWT와 `admin_profiles` 권한을 확인하는 Supabase Edge Function에서만 수행합니다.
 
 RSS 등록은 HTTPS만 허용하며 localhost, 사설 IP 등 명백한 내부망 주소를 차단합니다. 모든 브라우저 DB 쓰기 권한은 회수되어 있습니다.
 
@@ -62,12 +62,16 @@ supabase secrets set GEMINI_API_KEY
 supabase functions deploy news-desk
 ```
 
+CLI 대신 Dashboard Editor를 사용할 때는 `news-desk` 함수에
+`supabase/functions/news-desk/index.ts`와 `news.ts` 두 파일을 같은 위치로 추가합니다.
+배포 후 Function Settings의 JWT 검증을 켜 둡니다.
+
 선택 비밀값:
 
 - `GEMINI_MODEL`: 기본값 `gemini-2.5-flash-lite`
 - `ALLOWED_ORIGINS`: 쉼표로 구분한 허용 Origin. 기본값에 GitHub Pages 주소와 로컬 개발 주소가 포함됩니다.
 
-Supabase가 함수에 제공하는 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`는 별도 저장하지 않습니다. 함수 배포 후 로그인 → 수집 설정 → RSS 추가/뉴스 수집 → 추천 토픽 선택 → 초안 생성 순서로 실제 연동을 확인합니다.
+Supabase가 함수에 자동 제공하는 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS`, `SUPABASE_SECRET_KEYS`, `SUPABASE_JWKS`는 별도 저장하지 않습니다. 함수는 `@supabase/server`의 사용자 인증 컨텍스트를 사용하며 JWT 검증을 켭니다. 함수 배포 후 로그인 → 수집 설정 → RSS 추가/뉴스 수집 → 추천 토픽 선택 → 초안 생성 순서로 실제 연동을 확인합니다.
 
 ## 외부 API 및 RSS 준비
 
