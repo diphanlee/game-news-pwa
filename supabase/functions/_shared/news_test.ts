@@ -21,7 +21,14 @@ Deno.test('RSS와 Atom 항목 파싱', () => {
 
 Deno.test('유사 제목을 묶고 추천 결과를 10개로 제한', () => {
   const make = (id: string, title: string, publisher: string): StoredArticle => ({ id, title, publisher, url: `https://example.com/${id}`, publishedAt: null, excerpt: '' });
-  const items = [make('a', '오로라 모바일 사전예약 시작', 'A'), make('b', '오로라 모바일 글로벌 사전예약', 'B'), ...Array.from({ length: 12 }, (_, i) => make(`x${i}`, `고유뉴스 ${i} 새로운소식`, 'C'))];
+  const items = [
+    make('a', '오로라 모바일 사전예약 시작', 'A'),
+    make('b', '오로라 모바일 글로벌 사전예약', 'B'),
+    ...Array.from({ length: 12 }, (_, i) => {
+      const suffix = String.fromCharCode(97 + i).repeat(2);
+      return make(`x${i}`, `topic${suffix} detail${suffix}`, 'C');
+    }),
+  ];
   const groups = groupArticles(items);
   assertEquals(groups.length, 10); assertEquals(groups[0].articles.length, 2); assertEquals(groups[0].publishers, 2);
 });
