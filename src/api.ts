@@ -14,7 +14,19 @@ export async function runServerAction(action: string, payload: Record<string, un
   const { data, error } = await supabase.functions.invoke<FunctionResult>('news-desk', {
     body: { action, ...payload },
   });
-  if (error) throw new Error(error.message || '서버 작업을 실행하지 못했습니다.');
+  if (error) {
+    let message = error.message || '서버 작업을 실행하지 못했습니다.';
+    const context = 'context' in error ? error.context : null;
+    if (context instanceof Response) {
+      try {
+        const details = await context.clone().json() as Partial<FunctionResult>;
+        if (details.message) message = details.message;
+      } catch {
+        // Keep the SDK message when the response body is not JSON.
+      }
+    }
+    throw new Error(message);
+  }
   if (!data?.ok) throw new Error(data?.message || '서버 작업이 실패했습니다.');
   return data;
 }
