@@ -79,7 +79,28 @@ async function geminiDraft(topic: TopicRow) {
 
 async function generateDrafts(admin: Db, topicIds: string[]) {
   if (!Array.isArray(topicIds) || !topicIds.length || topicIds.length > 10) throw new Error('INVALID_TOPIC_SELECTION'); const query = await admin.from('topics').select('id,title,summary,topic_articles(articles(id,title,canonical_url,publisher,published_at,excerpt))').in('id', topicIds); if (query.error) throw query.error; let drafts = 0; const failures: Array<{ id: string; message: string }> = [];
-  for (const raw of query.data ?? []) { const topic = { ...raw, topic_articles: raw.topic_articles.map((row: { articles: Record<string, unknown> | null }) => ({ articles: row.articles ? { id: row.articles.id, title: row.articles.title, url: row.articles.canonical_url, publisher: row.articles.publisher, publishedAt: row.articles.published_at, excerpt: row.articles.excerpt } : null })) } as TopicRow; try { const generated = await geminiDraft(topic); const inserted = await admin.from('drafts').insert({ topic_id: topic.id, status: 'draft', title: topic.title, content: { markdown: generated.text, plain_text: generated.text, model: generated.model }, expires_at: new Date(Date.now() + 30 * 86400000).toISOString() }).select('id').single(); if (inserted.error) throw inserted.error; const citations = topic.topic_articles.map(x => x.articles).filter(Boolean) as StoredArticle[]; if (citations.length) { const citationInsert = await admin.from('draft_citations').insert(citations.map((article, index) => ({ draft_id: inserted.data.id, citation_no: index + 1, article_id: article.id, source_snapshot: { title: article.title, url: article.url, publisher: article.publisher, published_at: article.publishedAt } }))); if (citationInsert.error) throw citationInsert.error; } drafts++; } catch (error) { failures.push({ id: topic.id, message: error instanceof Error ? error.message : 'UNKNOWN' }); } }
+  for (const raw of query.data ?? []) {
+    const topicArticles = raw.topic_articles.map(row => {
+      const value = Array.isArray(row.articles) ? row.articles[0] : row.articles;
+      return { articles: value ? {
+        id: String(value.id), title: String(value.title), url: String(value.canonical_url),
+        publisher: String(value.publisher || '출처 미상'), publishedAt: value.published_at ? String(value.published_at) : null,
+        excerpt: String(value.excerpt || ''),
+      } : null };
+    });
+    const topic: TopicRow = { id: raw.id, title: raw.title, summary: raw.summary, topic_articles: topicArticles };
+    try {
+      const generated = await geminiDraft(topic);
+      const inserted = await admin.from('drafts').insert({ topic_id: topic.id, status: 'draft', title: topic.title, content: { markdown: generated.text, plain_text: generated.text, model: generated.model }, expires_at: new Date(Date.now() + 30 * 86400000).toISOString() }).select('id').single();
+      if (inserted.error) throw inserted.error;
+      const citations = topic.topic_articles.map(x => x.articles).filter(Boolean) as StoredArticle[];
+      if (citations.length) {
+        const citationInsert = await admin.from('draft_citations').insert(citations.map((article, index) => ({ draft_id: inserted.data.id, citation_no: index + 1, article_id: article.id, source_snapshot: { title: article.title, url: article.url, publisher: article.publisher, published_at: article.publishedAt } })));
+        if (citationInsert.error) throw citationInsert.error;
+      }
+      drafts++;
+    } catch (error) { failures.push({ id: topic.id, message: error instanceof Error ? error.message : 'UNKNOWN' }); }
+  }
   return { drafts, failures };
 }
 
