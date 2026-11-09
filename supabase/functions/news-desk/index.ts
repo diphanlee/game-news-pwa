@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.0';
-import { groupArticles, parseFeedXml, validateFeedUrl, type RawArticle, type StoredArticle } from '../_shared/news.ts';
+import { groupArticles, parseFeedXml, validateFeedUrl, type RawArticle, type StoredArticle } from './news.ts';
 
 type Db = SupabaseClient;
 type TopicRow = { id: string; title: string; summary: string | null; topic_articles: Array<{ articles: StoredArticle | null }> };

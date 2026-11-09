@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from 'jsr:@std/assert@1';
-import { canonical, clean, groupArticles, parseFeedXml, validateFeedUrl, type StoredArticle } from './news.ts';
+import { canonical, clean, groupArticles, parseFeedXml, validateFeedUrl, type StoredArticle } from '../news-desk/news.ts';
 
 Deno.test('HTML 정리와 추적 파라미터 제거', () => {
   assertEquals(clean('<b>신작</b> &amp; 업데이트'), '신작 & 업데이트');
