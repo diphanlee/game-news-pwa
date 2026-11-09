@@ -12,5 +12,5 @@ revoke insert, update, delete, truncate on all tables in schema public from anon
 
 insert into public.app_settings(key, value) values
  ('naver_search_queries', '["게임 신작","게임 업데이트","게임 업계","이스포츠"]'::jsonb),
- ('gemini_model', '"gemini-2.5-flash-lite"'::jsonb)
+ ('gemini_model', '"gemini-3.5-flash-lite"'::jsonb)
 on conflict (key) do nothing;

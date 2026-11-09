@@ -71,7 +71,7 @@ CLI 대신 Dashboard Editor를 사용할 때는 `news-desk` 함수에
 
 선택 비밀값:
 
-- `GEMINI_MODEL`: 기본값 `gemini-2.5-flash-lite`
+- `GEMINI_MODEL`: 기본값 `gemini-3.5-flash-lite`
 - `ALLOWED_ORIGINS`: 쉼표로 구분한 허용 Origin. 기본값에 GitHub Pages 주소와 로컬 개발 주소가 포함됩니다.
 
 Supabase가 함수에 자동 제공하는 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS`, `SUPABASE_SECRET_KEYS`는 별도 저장하지 않습니다. 함수는 `supabase-js`로 사용자 세션 JWT를 검증하고 `SUPABASE_SECRET_KEYS['default']`로 관리자 쓰기를 수행합니다. Function Settings의 레거시 JWT 검증은 끕니다. 함수 배포 후 로그인 → 수집 설정 → RSS 추가/뉴스 수집 → 추천 토픽 선택 → 초안 생성 순서로 실제 연동을 확인합니다.
