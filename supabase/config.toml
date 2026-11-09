@@ -1,0 +1,4 @@
+project_id = "game-news-pwa"
+
+[functions.news-desk]
+verify_jwt = true
