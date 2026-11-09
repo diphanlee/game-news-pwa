@@ -9,6 +9,12 @@ const allowedOrigins = (Deno.env.get('ALLOWED_ORIGINS') || 'https://diphanlee.gi
 function cors(req: Request) { const origin = req.headers.get('origin') || ''; return { 'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : allowedOrigins[0], 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS', Vary: 'Origin' }; }
 function json(req: Request, body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { ...cors(req), 'Content-Type': 'application/json; charset=utf-8' } }); }
 function kstDate() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') return error.message;
+  if (typeof error === 'string') return error;
+  try { return JSON.stringify(error); } catch { return 'UNKNOWN'; }
+}
 
 async function requireAdmin(userDb: Db) {
   const profile = await userDb.from('admin_profiles').select('user_id').eq('role', 'admin').maybeSingle();
@@ -23,17 +29,17 @@ async function fetchRss(source: { id: string; name: string; feed_url: string }):
 }
 
 async function collectNews(admin: Db) {
-  const run = await admin.from('collection_runs').insert({ status: 'running' }).select('id').single(); if (run.error) throw run.error; const runId = run.data.id;
+  const run = await admin.from('collection_runs').insert({ status: 'running' }).select('id').single(); if (run.error) throw new Error(`COLLECTION_RUN_INSERT: ${run.error.message}`); const runId = run.data.id;
   try {
-    const sourceQuery = await admin.from('news_sources').select('id,name,feed_url').eq('source_type', 'rss').eq('enabled', true); if (sourceQuery.error) throw sourceQuery.error;
+    const sourceQuery = await admin.from('news_sources').select('id,name,feed_url').eq('source_type', 'rss').eq('enabled', true); if (sourceQuery.error) throw new Error(`SOURCE_QUERY: ${sourceQuery.error.message}`);
     const rssResults = await Promise.allSettled((sourceQuery.data ?? []).filter(x => x.feed_url).map(x => fetchRss(x as { id: string; name: string; feed_url: string })));
     const raw = rssResults.flatMap(item => item.status === 'fulfilled' ? item.value : []); const unique = [...new Map(raw.map(item => [item.url, item])).values()];
     if (!unique.length) throw new Error('NO_SOURCES_OR_RESULTS');
-    const upsert = await admin.from('articles').upsert(unique.map(item => ({ source_id: item.sourceId ?? null, title: item.title, canonical_url: item.url, publisher: item.publisher, published_at: item.publishedAt, excerpt: item.excerpt })), { onConflict: 'canonical_url' }).select('id,title,canonical_url,publisher,published_at,excerpt'); if (upsert.error) throw upsert.error;
+    const upsert = await admin.from('articles').upsert(unique.map(item => ({ source_id: item.sourceId ?? null, title: item.title, canonical_url: item.url, publisher: item.publisher, published_at: item.publishedAt, excerpt: item.excerpt })), { onConflict: 'canonical_url' }).select('id,title,canonical_url,publisher,published_at,excerpt'); if (upsert.error) throw new Error(`ARTICLE_UPSERT: ${upsert.error.message}`);
     const stored: StoredArticle[] = upsert.data.map(item => ({ id: item.id, title: item.title, url: item.canonical_url, publisher: item.publisher || '출처 미상', publishedAt: item.published_at, excerpt: item.excerpt || '' })); const groups = groupArticles(stored); const date = kstDate(); let topicCount = 0;
-    for (const group of groups) { const score = Math.min(100, 35 + group.articles.length * 12 + group.publishers * 8); const topic = await admin.from('topics').upsert({ title: group.title, category: '게임', origin: 'ai', summary: group.articles.slice(0, 3).map(a => a.title).join(' · '), importance_score: score, coverage_score: group.publishers * 10, final_score: score, recommendation_date: date }, { onConflict: 'recommendation_date,title' }).select('id').single(); if (topic.error) throw topic.error; await admin.from('topic_articles').upsert(group.articles.map(article => ({ topic_id: topic.data.id, article_id: article.id, is_selected: true })), { onConflict: 'topic_id,article_id' }); await admin.from('topic_daily_stats').upsert({ topic_id: topic.data.id, stat_date: date, article_count: group.articles.length, publisher_count: group.publishers }, { onConflict: 'topic_id,stat_date' }); topicCount++; }
-    await admin.from('collection_runs').update({ status: 'completed', finished_at: new Date().toISOString() }).eq('id', runId); return { collected: unique.length, topics: topicCount, warnings: rssResults.filter(x => x.status === 'rejected').length };
-  } catch (error) { await admin.from('collection_runs').update({ status: 'failed', finished_at: new Date().toISOString(), error_code: error instanceof Error ? error.message.slice(0, 200) : 'UNKNOWN' }).eq('id', runId); throw error; }
+    for (const group of groups) { const score = Math.min(100, 35 + group.articles.length * 12 + group.publishers * 8); const topic = await admin.from('topics').upsert({ title: group.title, category: '게임', origin: 'ai', summary: group.articles.slice(0, 3).map(a => a.title).join(' · '), importance_score: score, coverage_score: group.publishers * 10, final_score: score, recommendation_date: date }, { onConflict: 'recommendation_date,title' }).select('id').single(); if (topic.error) throw new Error(`TOPIC_UPSERT: ${topic.error.message}`); const links = await admin.from('topic_articles').upsert(group.articles.map(article => ({ topic_id: topic.data.id, article_id: article.id, is_selected: true })), { onConflict: 'topic_id,article_id' }); if (links.error) throw new Error(`TOPIC_ARTICLE_UPSERT: ${links.error.message}`); const stats = await admin.from('topic_daily_stats').upsert({ topic_id: topic.data.id, stat_date: date, article_count: group.articles.length, publisher_count: group.publishers }, { onConflict: 'topic_id,stat_date' }); if (stats.error) throw new Error(`TOPIC_STATS_UPSERT: ${stats.error.message}`); topicCount++; }
+    const completed = await admin.from('collection_runs').update({ status: 'completed', finished_at: new Date().toISOString() }).eq('id', runId); if (completed.error) throw new Error(`COLLECTION_RUN_COMPLETE: ${completed.error.message}`); return { collected: unique.length, topics: topicCount, warnings: rssResults.filter(x => x.status === 'rejected').length };
+  } catch (error) { const message = errorMessage(error); await admin.from('collection_runs').update({ status: 'failed', finished_at: new Date().toISOString(), error_code: message.slice(0, 200) }).eq('id', runId); console.error(message); throw new Error(message); }
 }
 
 async function geminiDraft(topic: TopicRow) {
@@ -43,7 +49,7 @@ async function geminiDraft(topic: TopicRow) {
 }
 
 async function generateDrafts(admin: Db, topicIds: string[]) {
-  if (!Array.isArray(topicIds) || !topicIds.length || topicIds.length > 10) throw new Error('INVALID_TOPIC_SELECTION'); const query = await admin.from('topics').select('id,title,summary,topic_articles(articles(id,title,canonical_url,publisher,published_at,excerpt))').in('id', topicIds); if (query.error) throw query.error; let drafts = 0; const failures: Array<{ id: string; message: string }> = [];
+  if (!Array.isArray(topicIds) || !topicIds.length || topicIds.length > 10) throw new Error('INVALID_TOPIC_SELECTION'); const query = await admin.from('topics').select('id,title,summary,topic_articles(articles(id,title,canonical_url,publisher,published_at,excerpt))').in('id', topicIds); if (query.error) throw new Error(`TOPIC_QUERY: ${query.error.message}`); let drafts = 0; const failures: Array<{ id: string; message: string }> = [];
   for (const raw of query.data ?? []) {
     const topicArticles = raw.topic_articles.map(row => {
       const value = Array.isArray(row.articles) ? row.articles[0] : row.articles;
@@ -57,14 +63,14 @@ async function generateDrafts(admin: Db, topicIds: string[]) {
     try {
       const generated = await geminiDraft(topic);
       const inserted = await admin.from('drafts').insert({ topic_id: topic.id, status: 'draft', title: topic.title, content: { markdown: generated.text, plain_text: generated.text, model: generated.model }, expires_at: new Date(Date.now() + 30 * 86400000).toISOString() }).select('id').single();
-      if (inserted.error) throw inserted.error;
+      if (inserted.error) throw new Error(`DRAFT_INSERT: ${inserted.error.message}`);
       const citations = topic.topic_articles.map(x => x.articles).filter(Boolean) as StoredArticle[];
       if (citations.length) {
         const citationInsert = await admin.from('draft_citations').insert(citations.map((article, index) => ({ draft_id: inserted.data.id, citation_no: index + 1, article_id: article.id, source_snapshot: { title: article.title, url: article.url, publisher: article.publisher, published_at: article.publishedAt } })));
-        if (citationInsert.error) throw citationInsert.error;
+        if (citationInsert.error) throw new Error(`CITATION_INSERT: ${citationInsert.error.message}`);
       }
       drafts++;
-    } catch (error) { failures.push({ id: topic.id, message: error instanceof Error ? error.message : 'UNKNOWN' }); }
+    } catch (error) { failures.push({ id: topic.id, message: errorMessage(error) }); }
   }
   return { drafts, failures };
 }
@@ -75,5 +81,5 @@ export default { fetch: async (req: Request) => {
   if (auth.error) return json(req, { ok: false, message: auth.error.message }, auth.error.status);
   const userDb = auth.data.supabase as Db; const admin = auth.data.supabaseAdmin as Db;
   try { await requireAdmin(userDb); const body = await req.json(); if (body.action === 'collect-news') { const result = await collectNews(admin); return json(req, { ok: true, ...result, message: `기사 ${result.collected}건을 수집하고 토픽 ${result.topics}개를 추천했습니다.${result.warnings ? ` RSS ${result.warnings}개는 실패했습니다.` : ''}` }); } if (body.action === 'generate-drafts') { const result = await generateDrafts(admin, body.topicIds); return json(req, { ok: result.drafts > 0, ...result, message: `초안 ${result.drafts}개를 생성했습니다.${result.failures.length ? ` ${result.failures.length}개는 실패했습니다.` : ''}` }, result.drafts ? 200 : 502); } if (body.action === 'save-rss-source') { const feedUrl = validateFeedUrl(String(body.feedUrl || '')); const name = String(body.name || '').trim().slice(0, 100); if (!name) throw new Error('RSS_NAME_REQUIRED'); const saved = await admin.from('news_sources').insert({ name, source_type: 'rss', feed_url: feedUrl, enabled: true }); if (saved.error) throw saved.error; return json(req, { ok: true, message: 'RSS 출처를 추가했습니다.' }); } return json(req, { ok: false, message: '지원하지 않는 작업입니다.' }, 400); }
-  catch (error) { const message = error instanceof Error ? error.message : 'UNKNOWN'; const status = message === 'UNAUTHORIZED' ? 401 : message === 'FORBIDDEN' ? 403 : 400; return json(req, { ok: false, message }, status); }
+  catch (error) { const message = errorMessage(error); console.error(message); const status = message === 'UNAUTHORIZED' ? 401 : message === 'FORBIDDEN' ? 403 : 400; return json(req, { ok: false, message }, status); }
 } };

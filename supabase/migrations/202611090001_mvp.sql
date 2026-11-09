@@ -1,6 +1,6 @@
 -- Phase 1 MVP hardening. Safe to run after 202610300001_initial.sql.
 create unique index if not exists topics_daily_title_unique
-  on public.topics(recommendation_date, title) where recommendation_date is not null;
+  on public.topics(recommendation_date, title);
 
 create index if not exists articles_collected_idx on public.articles(collected_at desc);
 create index if not exists topic_articles_article_idx on public.topic_articles(article_id);

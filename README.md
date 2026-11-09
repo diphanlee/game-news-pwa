@@ -44,6 +44,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=PUBLIC_PUBLISHABLE_OR_ANON_KEY
    - `supabase/migrations/202610300001_initial.sql`
    - `supabase/migrations/202611090001_mvp.sql`
    - `supabase/migrations/202611090002_rss_defaults.sql`
+   - `supabase/migrations/202611090003_topic_upsert.sql`
 2. Authentication → Users에서 관리자 이메일/비밀번호 계정을 직접 만듭니다.
 3. 생성된 사용자의 UUID로 아래 SQL을 실행합니다.
 
